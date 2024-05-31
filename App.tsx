@@ -19,6 +19,7 @@ global.Buffer = Buffer;
 type TransactionProps = {
   signature: string;
   slot: number;
+  sender: string;
 };
 
 export default function App() {
@@ -62,6 +63,7 @@ export default function App() {
     <TouchableOpacity style={styles.card}>
       <Text style={styles.signature}>Signature: {item.signature}</Text>
       <Text style={styles.slot}>Slot: {item.slot}</Text>
+      <Text>Type: {item.sender === address ? 'Outgoing' : 'Incoming'}</Text>
     </TouchableOpacity>
   );
 
