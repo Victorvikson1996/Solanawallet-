@@ -6,53 +6,66 @@ import {
   TextInput,
   Button,
   FlatList,
-  StyleSheet
+  StyleSheet,
+  ActivityIndicator,
+  TouchableOpacity
 } from 'react-native';
 import { Connection, PublicKey } from '@solana/web3.js';
-import axios from 'axios';
 import 'react-native-get-random-values';
 
 import { Buffer } from 'buffer';
 global.Buffer = Buffer;
 
+type TransactionProps = {
+  signature: string;
+  slot: number;
+  sender: string;
+};
+
 export default function App() {
-  const [address, setAddress] = useState('');
+  const [address, setAddress] = useState<string>(
+    '9QgXqrgdbVU8KcpfskqJpAXKzbaYQJecgMAruSWoXDkM'
+  );
   const [balance, setBalance] = useState<number | null>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const getWalletData = async () => {
     try {
       setError(null);
-      const connection = new Connection('https://api.mainnet-beta.solana.com');
+      setIsLoading(true);
+      const connection = new Connection(
+        'https://api.mainnet-beta.solana.com',
+        'confirmed'
+      );
+
+      // Fetch balance
       const publicKey = new PublicKey(address);
       const balance = await connection.getBalance(publicKey);
+
       setBalance(balance / 1e9); // Convert lamports to SOL
 
-      const response = await axios.get(
-        `https://api.solscan.io/account/transactions?address=${address}&limit=10`
-      );
-      setTransactions(response.data);
-    } catch (e) {
-      if (axios.isAxiosError(e)) {
-        if (e.response) {
-          // Server responded with a status other than 200 range
-          setError(`Server Error: ${e.response.status}`);
-        } else if (e.request) {
-          // Request was made but no response was received
-          setError('Network Error: No response received');
-        } else {
-          // Something else happened while setting up the request
-          setError(`Error: ${e.message}`);
-        }
-      } else if (e instanceof TypeError) {
-        // Handle other types of errors (e.g., invalid address format)
-        setError('Invalid address format or network error');
-      } else {
-        setError('An unknown error occurred');
-      }
+      // Fetch last 10 transactions
+      const transactionResponse =
+        await connection.getConfirmedSignaturesForAddress2(publicKey, {
+          limit: 10
+        });
+      setTransactions(transactionResponse);
+    } catch (e: any) {
+      setError('An error occurred while fetching data.');
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  const renderTransactionItem = ({ item }: { item: TransactionProps }) => (
+    <TouchableOpacity style={styles.card}>
+      <Text style={styles.signature}>Signature: {item.signature}</Text>
+      <Text style={styles.slot}>Slot: {item.slot}</Text>
+      <Text>Type: {item.sender === address ? 'Outgoing' : 'Incoming'}</Text>
+    </TouchableOpacity>
+  );
 
   return (
     <View style={styles.container}>
@@ -66,18 +79,14 @@ export default function App() {
       </View>
 
       <Button title='View' onPress={getWalletData} />
+      {isLoading && <ActivityIndicator size='large' color='#0000ff' />}
       {error && <Text style={styles.error}>{error}</Text>}
       {balance !== null && <Text>Balance: {balance} SOL</Text>}
 
       <FlatList
         data={transactions}
         keyExtractor={(item) => item.signature}
-        renderItem={({ item }) => (
-          <View style={styles.transaction}>
-            <Text>Signature: {item.signature}</Text>
-            <Text>Slot: {item.slot}</Text>
-          </View>
-        )}
+        renderItem={({ item }) => renderTransactionItem({ item })}
       />
     </View>
   );
@@ -100,7 +109,17 @@ const styles = StyleSheet.create({
   error: {
     color: 'red'
   },
-  transaction: {
-    marginVertical: 10
+  card: {
+    backgroundColor: '#f0f0f0',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 10
+  },
+  signature: {
+    fontSize: 16,
+    fontWeight: 'bold'
+  },
+  slot: {
+    fontSize: 14
   }
 });
